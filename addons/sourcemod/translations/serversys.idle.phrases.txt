@@ -1,0 +1,28 @@
+"Phrases"
+{
+	"Live updates"
+	{
+		"en"		"Live updates have been performed on the server. You should not have been effected."
+	}
+
+	"Idle uptime"
+	{
+		"#format"	"{1:i},{2:i},{3:f}"
+		"en"		"The server has been up for {1} hours, {2} minutes and {3} seconds."
+	}
+
+	"Map wrap up"
+	{
+		"en"		"Killing players for drops, cleaning map up..."
+	}
+
+	"Swapped because away"
+	{
+		"en"		"You were swapped to the away team for being inactive!"
+	}
+
+	"Swapped because back"
+	{
+		"en"		"Glad you're back! We've swapped you to the active player team."
+	}
+}
