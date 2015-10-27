@@ -65,6 +65,7 @@ public void OnPluginStart(){
 	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
 	HookEvent("round_end", Event_RoundEnd, EventHookMode_Post);
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
+	HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
 
 	AddNormalSoundHook(Hook_Sound);
 
@@ -131,8 +132,8 @@ void LoadConfig(){
 
 	if(KvJumpToKey(kv, "farming")){
 		g_bAwayKill = view_as<bool>(KvGetNum(kv, "enabled", 0));
-		g_iAwayTimeout = KvGetNum(kv, "away-timeout", 30);
-		g_iAwayTeam_Default = KvGetNum(kv, "away-team", 0);
+		g_iAwayTimeout = KvGetNum(kv, "away_timeout", 30);
+		g_iAwayTeam_Default = KvGetNum(kv, "away_team", 0);
 
 		if(g_iAwayTeam_Default == 0)
 			g_iAwayTeam = GetRandomInt(2,3);
@@ -142,13 +143,13 @@ void LoadConfig(){
 		if(KvJumpToKey(kv, "spawns")){
 			g_bOverrideSpawn = true;
 
-			g_fSpawn_Away[0] = KvGetFloat(kv, "away-x", 0.0);
-			g_fSpawn_Away[1] = KvGetFloat(kv, "away-y", 0.0);
-			g_fSpawn_Away[2] = KvGetFloat(kv, "away-z", 0.0);
+			g_fSpawn_Away[0] = KvGetFloat(kv, "away_x", 0.0);
+			g_fSpawn_Away[1] = KvGetFloat(kv, "away_y", 0.0);
+			g_fSpawn_Away[2] = KvGetFloat(kv, "away_z", 0.0);
 
-			g_fSpawn_Active[0] = KvGetFloat(kv, "active-x", 0.0);
-			g_fSpawn_Active[1] = KvGetFloat(kv, "active-y", 0.0);
-			g_fSpawn_Active[2] = KvGetFloat(kv, "active-z", 0.0);
+			g_fSpawn_Active[0] = KvGetFloat(kv, "active_x", 0.0);
+			g_fSpawn_Active[1] = KvGetFloat(kv, "active_y", 0.0);
+			g_fSpawn_Active[2] = KvGetFloat(kv, "active_z", 0.0);
 
 			KvGoBack(kv);
 		}else g_bOverrideSpawn = false;
@@ -158,12 +159,17 @@ void LoadConfig(){
 		g_bAwayKill = false;
 
 	if(KvJumpToKey(kv, "misc")){
-		g_bDisableMovement  = view_as<bool>(KvGetNum(kv, "disable-movement", 0));
-		g_bDisableButtons 	= view_as<bool>(KvGetNum(kv, "disable-buttons", 1));
-		g_bDisableSounds 	= view_as<bool>(KvGetNum(kv, "disable-sounds", 0));
-		g_bAutoPick 		= view_as<bool>(KvGetNum(kv, "auto-assign", 1));
+		g_bDisableMovement  = view_as<bool>(KvGetNum(kv, "disable_movement", 0));
+		g_bDisableButtons 	= view_as<bool>(KvGetNum(kv, "disable_buttons", 0));
+		g_bDisableSounds 	= view_as<bool>(KvGetNum(kv, "disable_sounds", 0));
+		g_bAutoPick 		= view_as<bool>(KvGetNum(kv, "auto_assign", 0));
 
 		KvGoBack(kv);
+	}else{
+		g_bDisableMovement = false;
+		g_bDisableButtons = false;
+		g_bDisableSounds = false;
+		g_bAutoPick = false;
 	}
 
 	if(KvJumpToKey(kv, "uptime")){
@@ -178,7 +184,7 @@ void LoadConfig(){
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3]){
 	if(IsClientInGame(client) && IsPlayerAlive(client)){
-		if(g_bDisableButtons){
+		if(g_bDisableButtons == true){
 			buttons &= ~IN_JUMP;
 			buttons &= ~IN_ATTACK;
 			buttons &= ~IN_ATTACK2;
@@ -188,7 +194,8 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			buttons &= ~IN_MOVERIGHT;
 			buttons &= ~IN_RIGHT;
 			buttons &= ~IN_LEFT;
-		}else if(g_bAwayKill){
+		}
+		if(g_bAwayKill){
 			if(g_iLastButtons[client] != buttons){
 				g_iLastMovement[client] = GetTime();
 				g_iLastButtons[client] = buttons;
@@ -224,7 +231,7 @@ public Action Hook_Sound(int clients[64], int &numc, char sam[PLATFORM_MAX_PATH]
 }
 
 public Action Hook_SetTransmit(int entity, int client){
-	if((0 < client <= MaxClients) && (0 < entity <= MaxClients) && IsClientInGame(client) && IsClientInGame(entity)){
+	if(entity != client && (0 < client <= MaxClients) && (0 < entity <= MaxClients) && IsClientInGame(client) && IsClientInGame(entity)){
 		if(!g_bAwayKill)
 			return Plugin_Handled;
 
@@ -258,10 +265,34 @@ public Action Event_PlayerSpawn(Handle event, const char[] name, bool dontBroadc
 	}
 }
 
+public Action Event_PlayerTeam(Handle event, const char[] name, bool dontBroadcast){
+	SetEventBroadcast(event, true);
+
+	int client = GetClientOfUserId(GetEventInt(event, "userid"));
+
+	if((0 < client <= MaxClients) && IsClientInGame(client) && !IsPlayerAlive(client)){
+		CreateTimer(0.1, Timer_Respawn, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+	}
+
+	return Plugin_Continue;
+}
+
+public Action Timer_Respawn(Handle timer, int userid){
+	int client = GetClientOfUserId(userid);
+
+	if((0 < client <= MaxClients) && IsClientInGame(client) && !IsPlayerAlive(client)){
+		if(GetClientTeam(client) == 2 || GetClientTeam(client) == 3){
+			CS_RespawnPlayer(client);
+		}
+	}
+
+	return Plugin_Stop;
+}
+
 public Action PlayerSpawnPost(Handle timer, int userid){
 	int client = GetClientOfUserId(userid);
 
-	if(0 < client <= MaxClients && IsClientInGame(client)){
+	if((0 < client <= MaxClients) && IsClientInGame(client)){
 		if(!IsPlayerAlive(client))
 			CS_RespawnPlayer(client);
 		if(g_bAwayKill == true && SpawnSetup() == true){
@@ -330,7 +361,9 @@ public Action Event_OnFullConnect(Handle event, const char[] name, bool dontBroa
 		if(!client || client == 0 || !IsClientInGame(client))
 			return Plugin_Continue;
 
-		ChangeClientTeam(client, PickTeam());
+		SetEntProp(client, Prop_Send, "m_lifeState", 0);
+
+		SetEntProp(client, Prop_Send, "m_iTeamNum", PickTeam());
 		ForcePlayerSuicide(client);
 		CS_RespawnPlayer(client);
 
@@ -350,6 +383,11 @@ public Action Event_OnMatchRestart(Handle event, const char[] name, bool dontBro
 				continue;
 
 			ChangeClientTeam(client, PickTeam());
+
+			if(IsPlayerAlive(client)){
+				ForcePlayerSuicide(client);
+				CS_RespawnPlayer(client);
+			}
 		}
 	}
 
