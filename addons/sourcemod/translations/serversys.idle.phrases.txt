@@ -23,6 +23,6 @@
 
 	"Swapped because back"
 	{
-		"en"		"Glad you're back! We've swapped you to the active player team."
+		"en"		"You've swapped you to the active player team!"
 	}
 }

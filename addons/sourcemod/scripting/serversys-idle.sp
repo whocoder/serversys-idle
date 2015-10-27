@@ -261,7 +261,9 @@ public Action Event_PlayerSpawn(Handle event, const char[] name, bool dontBroadc
 			SetEntPropFloat(client, Prop_Data, "m_flLaggedMovementValue", 0.0);
 		}
 
-		//CreateTimer(0.25, PlayerSpawnPost, GetClientUserId(client));
+		if(g_bAwayKill){
+			CreateTimer(0.0, PlayerSpawnPost, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
+		}
 	}
 }
 
@@ -293,17 +295,12 @@ public Action PlayerSpawnPost(Handle timer, int userid){
 	int client = GetClientOfUserId(userid);
 
 	if((0 < client <= MaxClients) && IsClientInGame(client)){
-		if(!IsPlayerAlive(client))
-			CS_RespawnPlayer(client);
 		if(g_bAwayKill == true && SpawnSetup() == true){
-			float destination[3];
-			if(GetClientTeam(client) == g_iAwayTeam)
-				destination = g_fSpawn_Away;
-			else
-				destination = g_fSpawn_Active;
-
-			TeleportEntity(client, destination, NULL_VECTOR, NULL_VECTOR);
-			PrintTextChatAll("Teleporting client to %f %f %f", destination[0], destination[1], destination[2]);
+			TeleportEntity(client, ((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away : g_fSpawn_Active), NULL_VECTOR, NULL_VECTOR);
+			PrintToServer("Spawning client %N at %f, %f, %f,", client,
+				((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[0] : g_fSpawn_Active[0]),
+				((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[1] : g_fSpawn_Active[1]),
+				((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[2] : g_fSpawn_Active[2]));
 		}
 	}
 
@@ -314,13 +311,12 @@ public Action WelcomeMenuTimer(Handle timer, int userid){
 	int client = GetClientOfUserId(userid);
 
 	if(0 < client <= MaxClients && IsClientInGame(client)){
-		// Menu WelcomeMenu = CreateMenu(Menu_Welcome_Handler);
-		// WelcomeMenu.SetTitle(g_cWelcomeTitle);
-		//
-		// WelcomeMenu.AddItem("spacer", " ", ITEMDRAW_SPACER);
-		// WelcomeMenu.AddItem("desc", g_cWelcomeText, ITEMDRAW_RAWLINE);
-		//
-		// WelcomeMenu.Display(client, 30);
+		Menu WelcomeMenu = CreateMenu(Menu_Welcome_Handler);
+		WelcomeMenu.SetTitle(g_cWelcomeTitle);
+
+		WelcomeMenu.AddItem("spacer", " ", ITEMDRAW_SPACER);
+		WelcomeMenu.AddItem("desc", g_cWelcomeText, ITEMDRAW_RAWLINE);
+		WelcomeMenu.Display(client, 30);
 	}
 
 	return Plugin_Stop;
@@ -333,7 +329,11 @@ public int Menu_Welcome_Handler(Menu menu, MenuAction action, int param1, int pa
 }
 
 public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast){
-	ServerCommand("sm_cvar mp_default_team_winner_no_objective %d", (g_iAwayTeam == 2 ? 3 : 2));
+	if(g_bAwayKill)
+		ServerCommand("sm_cvar mp_default_team_winner_no_objective %d", (g_iAwayTeam == 2 ? 3 : 2));
+	else
+		ServerCommand("sm_cvar mp_default_team_winner_no_objective %d", GetRandomInt(2,3));
+	
 	ServerCommand("mp_warmup_end");
 	return Plugin_Continue;
 }
