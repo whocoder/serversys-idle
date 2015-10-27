@@ -316,6 +316,7 @@ public Action WelcomeMenuTimer(Handle timer, int userid){
 
 		WelcomeMenu.AddItem("spacer", " ", ITEMDRAW_SPACER);
 		WelcomeMenu.AddItem("desc", g_cWelcomeText, ITEMDRAW_RAWLINE);
+
 		WelcomeMenu.Display(client, 30);
 	}
 
