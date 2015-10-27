@@ -60,10 +60,10 @@ public void OnPluginStart(){
 	LoadTranslations("generic.phrases");
 	LoadTranslations("serversys.idle.phrases");
 
-	HookEvent("player_connect_full", Event_OnFullConnect, EventHookMode_Pre);
-	HookEvent("cs_match_end_restart", Event_OnMatchRestart, EventHookMode_Pre);
-	HookEvent("round_start", Event_RoundStart, EventHookMode_Pre);
-	HookEvent("round_end", Event_RoundEnd, EventHookMode_Pre);
+	HookEvent("player_connect_full", Event_OnFullConnect, EventHookMode_Post);
+	HookEvent("cs_match_end_restart", Event_OnMatchRestart, EventHookMode_Post);
+	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
+	HookEvent("round_end", Event_RoundEnd, EventHookMode_Post);
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 
 	AddNormalSoundHook(Hook_Sound);
@@ -177,42 +177,38 @@ void LoadConfig(){
 }
 
 public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3], float angles[3]){
-	// if(IsClientInGame(client) && IsPlayerAlive(client)){
-	// 	if(g_bDisableButtons){
-	// 		buttons &= ~IN_JUMP;
-	// 		buttons &= ~IN_ATTACK;
-	// 		buttons &= ~IN_ATTACK2;
-	// 		buttons &= ~IN_FORWARD;
-	// 		buttons &= ~IN_BACK;
-	// 		buttons &= ~IN_MOVELEFT;
-	// 		buttons &= ~IN_MOVERIGHT;
-	// 		buttons &= ~IN_RIGHT;
-	// 		buttons &= ~IN_LEFT;
-	// 	}else{
-	// 		if(g_bAwayKill){
-	// 			if(g_iLastButtons[client] != buttons){
-	// 				g_iLastMovement[client] = GetTime();
-	// 				g_iLastButtons[client] = buttons;
-	//
-	// 				if(GetClientTeam(client) == g_iAwayTeam){
-	// 					ChangeClientTeam(client, (g_iAwayTeam == 2 ? 3 : 2));
-	// 					ForcePlayerSuicide(client);
-	// 					CS_RespawnPlayer(client);
-	//
-	// 					PrintTextChat(client, "%t", "Swapped because back");
-	// 				}
-	// 			}else{
-	// 				if((GetTime() - g_iLastMovement[client] > g_iAwayTimeout) && GetClientTeam(client) != g_iAwayTeam){
-	// 					ChangeClientTeam(client, g_iAwayTeam);
-	// 					ForcePlayerSuicide(client);
-	// 					CS_RespawnPlayer(client);
-	//
-	// 					PrintTextChat(client, "%t", "Swapped because away");
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
+	if(IsClientInGame(client) && IsPlayerAlive(client)){
+		if(g_bDisableButtons){
+			buttons &= ~IN_JUMP;
+			buttons &= ~IN_ATTACK;
+			buttons &= ~IN_ATTACK2;
+			buttons &= ~IN_FORWARD;
+			buttons &= ~IN_BACK;
+			buttons &= ~IN_MOVELEFT;
+			buttons &= ~IN_MOVERIGHT;
+			buttons &= ~IN_RIGHT;
+			buttons &= ~IN_LEFT;
+		}else if(g_bAwayKill){
+			if(g_iLastButtons[client] != buttons){
+				g_iLastMovement[client] = GetTime();
+				g_iLastButtons[client] = buttons;
+
+				if(GetClientTeam(client) == g_iAwayTeam){
+					ChangeClientTeam(client, (g_iAwayTeam == 2 ? 3 : 2));
+					ForcePlayerSuicide(client);
+					CS_RespawnPlayer(client);
+
+					PrintTextChat(client, "%t", "Swapped because back");
+				}
+			}else if(((GetTime() - g_iLastMovement[client]) > g_iAwayTimeout) && (GetClientTeam(client) != g_iAwayTeam)){
+				ChangeClientTeam(client, g_iAwayTeam);
+				ForcePlayerSuicide(client);
+				CS_RespawnPlayer(client);
+
+				PrintTextChat(client, "%t", "Swapped because away");
+			}
+		}
+	}
 
 	return Plugin_Continue;
 }
@@ -262,25 +258,26 @@ public Action Event_PlayerSpawn(Handle event, const char[] name, bool dontBroadc
 	}
 }
 
-// public Action PlayerSpawnPost(Handle timer, int userid){
-// 	int client = GetClientOfUserId(userid);
-//
-// 	// if(0 < client <= MaxClients && IsClientInGame(client)){
-// 	// 	//CS_RespawnPlayer(client);
-// 	// 	if(g_bAwayKill == true && SpawnSetup() == true){
-// 	// 		float destination[3];
-// 	// 		if(GetClientTeam(client) == g_iAwayTeam)
-// 	// 			destination = g_fSpawn_Away;
-// 	// 		else
-// 	// 			destination = g_fSpawn_Active;
-// 	//
-// 	// 		TeleportEntity(client, destination, NULL_VECTOR, NULL_VECTOR);
-// 	// 		PrintTextChatAll("Teleporting client to %f %f %f", destination[0], destination[1], destination[2]);
-// 	// 	}
-// 	// }
-//
-// 	return Plugin_Stop;
-// }
+public Action PlayerSpawnPost(Handle timer, int userid){
+	int client = GetClientOfUserId(userid);
+
+	if(0 < client <= MaxClients && IsClientInGame(client)){
+		if(!IsPlayerAlive(client))
+			CS_RespawnPlayer(client);
+		if(g_bAwayKill == true && SpawnSetup() == true){
+			float destination[3];
+			if(GetClientTeam(client) == g_iAwayTeam)
+				destination = g_fSpawn_Away;
+			else
+				destination = g_fSpawn_Active;
+
+			TeleportEntity(client, destination, NULL_VECTOR, NULL_VECTOR);
+			PrintTextChatAll("Teleporting client to %f %f %f", destination[0], destination[1], destination[2]);
+		}
+	}
+
+	return Plugin_Stop;
+}
 
 public Action WelcomeMenuTimer(Handle timer, int userid){
 	int client = GetClientOfUserId(userid);
@@ -329,7 +326,7 @@ public Action Event_OnFullConnect(Handle event, const char[] name, bool dontBroa
 		if(!client || client == 0 || !IsClientInGame(client))
 			return Plugin_Continue;
 
-		ChangeClientTeam(client, g_iAwayTeam);
+		ChangeClientTeam(client, PickTeam());
 		ForcePlayerSuicide(client);
 		CS_RespawnPlayer(client);
 
@@ -348,10 +345,7 @@ public Action Event_OnMatchRestart(Handle event, const char[] name, bool dontBro
 			if(!IsClientInGame(client))
 				continue;
 
-			if(g_bAwayKill)
-				ChangeClientTeam(client, g_iAwayTeam);
-			else
-				ChangeClientTeam(client, PickTeam());
+			ChangeClientTeam(client, PickTeam());
 		}
 	}
 
@@ -359,6 +353,9 @@ public Action Event_OnMatchRestart(Handle event, const char[] name, bool dontBro
 }
 
 stock bool SpawnSetup(){
+	if(!g_bAwayKill)
+		return false;
+
 	if(!g_bOverrideSpawn)
 		return false;
 
@@ -389,6 +386,9 @@ stock int PlayerCount(){
 }
 
 stock int PickTeam(){
+	if(g_bAwayKill == true)
+		return g_iAwayTeam;
+
 	int blu = 0; int red = 0;
 	for(int i=1;i<=MaxClients;i++){
 		if(IsClientInGame(i)){
