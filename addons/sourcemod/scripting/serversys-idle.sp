@@ -309,10 +309,10 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
 
 public Action Event_RoundEnd(Handle event, const char[] name, bool dontBroadcast){
 	for(int client = 1; client <= MaxClients; client++){
-		if(IsClientInGame(client))
+		if(IsClientInGame(client) && IsPlayerAlive(client))
 			ForcePlayerSuicide(client);
+			PrintTextChat(client, "%t", "Map wrap up");
 	}
-	PrintTextChatAll("%t", "Map wrap up");
 	if((GetTime() - g_iLastMapChange) > 60*7){
 		ServerCommand("sm_map %s", g_cMap);
 	}
