@@ -20,11 +20,10 @@ public Plugin myinfo = {
 }
 
 int g_iServerStart;
-int g_iLastMapChange;
 
 bool g_bWelcome;
-char g_cWelcomeTitle[64];
-char g_cWelcomeText[256];
+char g_cWelcomeTitle[128];
+char g_cWelcomeText[1024];
 
 bool g_bOverrideSpawn;
 bool g_bDisableButtons;
@@ -32,7 +31,7 @@ bool g_bDisableMovement;
 bool g_bUpTime;
 bool g_bAutoPick;
 bool g_bDisableSounds;
-char g_cMap[64];
+char g_cMap[128];
 char g_cUptimeCommand[128];
 
 bool g_bLateLoad = false;
@@ -51,6 +50,14 @@ int g_iLastButtons[MAXPLAYERS+1];
 int  g_iAwayTeam = 2;
 int  g_iAwayTeam_Default;
 
+bool g_bIdling = false;
+
+ConVar cv_RoundTime;
+ConVar cv_DefaultWin;
+ConVar cv_IgnoreWins;
+ConVar cv_DoWarmUp;
+ConVar cv_NextLevel;
+
 public void OnPluginStart(){
 	g_iServerStart = GetTime();
 
@@ -63,14 +70,41 @@ public void OnPluginStart(){
 	HookEvent("player_connect_full", Event_OnFullConnect, EventHookMode_Post);
 	HookEvent("cs_match_end_restart", Event_OnMatchRestart, EventHookMode_Post);
 	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
-	HookEvent("round_end", Event_RoundEnd, EventHookMode_Post);
+	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
 
 	AddNormalSoundHook(Hook_Sound);
 
 	if(g_bLateLoad && PlayerCount() > 0){
-		PrintTextChatAll("%t", "Live updates");
+		CPrintToChatAll("%t", "Live updates");
+	}
+
+	cv_RoundTime = FindConVar("mp_roundtime");
+	cv_IgnoreWins = FindConVar("mp_ignore_round_win_conditions");
+	cv_DefaultWin = FindConVar("mp_default_team_winner_no_objective");
+	cv_DoWarmUp = FindConVar("mp_do_warmup_period");
+	cv_NextLevel = FindConVar("nextlevel");
+
+	cv_RoundTime.IntValue = 5;
+	cv_IgnoreWins.IntValue = 1;
+	cv_DoWarmUp.IntValue = 0;
+
+	cv_DoWarmUp.AddChangeHook(Hook_ConVarChanged);
+	cv_IgnoreWins.AddChangeHook(Hook_ConVarChanged);
+	cv_RoundTime.AddChangeHook(Hook_ConVarChanged);
+}
+
+public void Hook_ConVarChanged(ConVar cv, const char[] value1, const char[] value2){
+	if(!StrEqual(value1, value2, false)){
+		if(cv == cv_DoWarmUp)
+			cv_DoWarmUp.IntValue = 0;
+
+		if(cv == cv_RoundTime)
+			cv_RoundTime.IntValue = 5;
+
+		if(cv == cv_NextLevel)
+			cv_NextLevel.SetString(g_cMap, true, false);
 	}
 }
 
@@ -96,9 +130,11 @@ public void OnClientDisconnect(int client){
 }
 
 public void OnMapStart(){
-	g_iLastMapChange = GetTime();
+	cv_IgnoreWins.IntValue = 1;
+	cv_RoundTime.FloatValue = 5.0;
+
 	GetCurrentMap(g_cMap, sizeof(g_cMap));
-	ServerCommand("sm_cvar nextlevel %s", g_cMap);
+	cv_NextLevel.SetString(g_cMap, true, false);
 }
 
 public void OnMapEnd(){
@@ -194,25 +230,32 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 			buttons &= ~IN_MOVERIGHT;
 			buttons &= ~IN_RIGHT;
 			buttons &= ~IN_LEFT;
+			buttons &= ~IN_DUCK;
 		}
+
+		// This bit is so that players can still
+		//	use the scoreboard without being swapped.
+		int ourbuttons = buttons;
+		ourbuttons &= ~IN_SCORE;
+
 		if(g_bAwayKill){
-			if(g_iLastButtons[client] != buttons){
+			if(g_iLastButtons[client] != ourbuttons){
 				g_iLastMovement[client] = GetTime();
-				g_iLastButtons[client] = buttons;
+				g_iLastButtons[client] = ourbuttons;
 
 				if(GetClientTeam(client) == g_iAwayTeam){
 					ChangeClientTeam(client, (g_iAwayTeam == 2 ? 3 : 2));
 					ForcePlayerSuicide(client);
 					CS_RespawnPlayer(client);
 
-					PrintTextChat(client, "%t", "Swapped because back");
+					CPrintToChat(client, "%t", "Swapped because back");
 				}
 			}else if(((GetTime() - g_iLastMovement[client]) > g_iAwayTimeout) && (GetClientTeam(client) != g_iAwayTeam)){
 				ChangeClientTeam(client, g_iAwayTeam);
 				ForcePlayerSuicide(client);
 				CS_RespawnPlayer(client);
 
-				PrintTextChat(client, "%t", "Swapped because away");
+				CPrintToChat(client, "%t", "Swapped because away");
 			}
 		}
 	}
@@ -249,7 +292,7 @@ public void Command_Uptime(int client, const char[] command, const char[] args){
 		time -= hours*3600.0;
 		int minutes = RoundToFloor(time/60.0);
 		time -= hours*60.0;
-		PrintTextChat(client, "%t", "Idle uptime", hours, minutes, time);
+		CPrintToChat(client, "%t", "Idle uptime", hours, minutes, time);
 	}
 }
 
@@ -265,19 +308,34 @@ public Action Event_PlayerSpawn(Handle event, const char[] name, bool dontBroadc
 			CreateTimer(0.0, PlayerSpawnPost, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 		}
 	}
+
+	cv_RoundTime.FloatValue = 5.0;
+	cv_IgnoreWins.IntValue = 1;
+
+	if(!g_bIdling){
+		CreateTimer((cv_RoundTime.FloatValue*60.0), Timer_EndRound, _, TIMER_FLAG_NO_MAPCHANGE);
+		g_bIdling = true;
+	}
+
+	return Plugin_Continue;
 }
 
 public Action Event_PlayerTeam(Handle event, const char[] name, bool dontBroadcast){
-	SetEventBroadcast(event, true);
-
 	int client = GetClientOfUserId(GetEventInt(event, "userid"));
 
 	if((0 < client <= MaxClients) && IsClientInGame(client) && !IsPlayerAlive(client)){
 		CreateTimer(0.1, Timer_Respawn, GetClientUserId(client), TIMER_FLAG_NO_MAPCHANGE);
 	}
 
-	return Plugin_Continue;
+	dontBroadcast = true;
+	return Plugin_Changed;
 }
+
+public Action Event_PlayerDeath(Handle event, const char[] name, bool dontBroadcast){
+	dontBroadcast = true;
+	return Plugin_Changed;
+}
+
 
 public Action Timer_Respawn(Handle timer, int userid){
 	int client = GetClientOfUserId(userid);
@@ -287,6 +345,22 @@ public Action Timer_Respawn(Handle timer, int userid){
 			CS_RespawnPlayer(client);
 		}
 	}
+
+	return Plugin_Stop;
+}
+
+public Action Timer_EndRound(Handle timer, any data){
+	cv_IgnoreWins.IntValue = 0;
+
+	CPrintToChatAll("%t", "Forcing round end");
+	CPrintToChatAll("%t", "Teams will be randomized");
+	CS_TerminateRound(5.0, CSRoundEnd_Draw, false);
+
+	return Plugin_Stop;
+}
+
+public Action Timer_EndMap(Handle timer, any data){
+	ServerCommand("sm_map %s", g_cMap);
 
 	return Plugin_Stop;
 }
@@ -314,8 +388,10 @@ public Action WelcomeMenuTimer(Handle timer, int userid){
 		Menu WelcomeMenu = CreateMenu(Menu_Welcome_Handler);
 		WelcomeMenu.SetTitle(g_cWelcomeTitle);
 
-		WelcomeMenu.AddItem("spacer", " ", ITEMDRAW_SPACER);
-		WelcomeMenu.AddItem("desc", g_cWelcomeText, ITEMDRAW_RAWLINE);
+		char therest[1024];
+		Format(therest, sizeof(therest), "\n\n%s", g_cWelcomeText);
+
+		WelcomeMenu.AddItem("mainmessage", g_cWelcomeText, ITEMDRAW_DISABLED);
 
 		WelcomeMenu.Display(client, 30);
 	}
@@ -331,24 +407,39 @@ public int Menu_Welcome_Handler(Menu menu, MenuAction action, int param1, int pa
 
 public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast){
 	if(g_bAwayKill)
-		ServerCommand("sm_cvar mp_default_team_winner_no_objective %d", (g_iAwayTeam == 2 ? 3 : 2));
+		cv_DefaultWin.IntValue = (g_iAwayTeam == 2 ? 3 : 2);
 	else
-		ServerCommand("sm_cvar mp_default_team_winner_no_objective %d", GetRandomInt(2,3));
-	
-	ServerCommand("mp_warmup_end");
+		cv_DefaultWin.IntValue = (GetRandomInt(2,3));
+
+	cv_RoundTime.FloatValue = 5.0;
+	cv_IgnoreWins.IntValue = 1;
+
+	if(!g_bIdling){
+		CreateTimer((cv_RoundTime.FloatValue*60.0), Timer_EndRound, _, TIMER_FLAG_NO_MAPCHANGE);
+		g_bIdling = true;
+	}
+
 	return Plugin_Continue;
 }
 
-public Action Event_RoundEnd(Handle event, const char[] name, bool dontBroadcast){
-	if((GetTime() - g_iLastMapChange) > 60){
-		for(int client = 1; client <= MaxClients; client++){
-			if(IsClientInGame(client) && IsPlayerAlive(client)){
-				ForcePlayerSuicide(client);
-				PrintTextChat(client, "%t", "Map wrap up");
+public Action CS_OnTerminateRound(float &delay, CSRoundEndReason &reason){
+	g_bIdling = false;
+
+	if(g_bAwayKill && (reason == CSRoundEnd_Draw)){
+		switch(g_iAwayTeam){
+			case 2:{
+				reason = CSRoundEnd_CTWin;
+			}
+			case 3:{
+				reason = CSRoundEnd_TerroristWin;
 			}
 		}
-		if((GetTime() - g_iLastMapChange) > 60*7){
-			ServerCommand("sm_map %s", g_cMap);
+	}
+
+	for(int client = 1; client <= MaxClients; client++){
+		if(IsClientInGame(client) && IsPlayerAlive(client)){
+			ForcePlayerSuicide(client);
+			CPrintToChat(client, "%t", "Map wrap up");
 		}
 	}
 

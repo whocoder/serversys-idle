@@ -25,4 +25,14 @@
 	{
 		"en"		"You've swapped you to the active player team!"
 	}
+
+	"Forcing round end"
+	{
+		"en"		"Forcing round to end..."
+	}
+
+	"Teams will be randomized"
+	{
+		"en"		"Teams will be randomized next round."
+	}
 }
