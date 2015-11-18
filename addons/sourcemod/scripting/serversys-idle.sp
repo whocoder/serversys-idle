@@ -69,7 +69,7 @@ public void OnPluginStart(){
 
 	HookEvent("player_connect_full", Event_OnFullConnect, EventHookMode_Post);
 	HookEvent("cs_match_end_restart", Event_OnMatchRestart, EventHookMode_Post);
-	HookEvent("round_start", Event_RoundStart, EventHookMode_Post);
+	HookEvent("round_prestart", Event_RoundStart, EventHookMode_Post);
 	HookEvent("player_death", Event_PlayerDeath, EventHookMode_Pre);
 	HookEvent("player_spawn", Event_PlayerSpawn, EventHookMode_Post);
 	HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
@@ -132,6 +132,8 @@ public void OnClientDisconnect(int client){
 public void OnMapStart(){
 	cv_IgnoreWins.IntValue = 1;
 	cv_RoundTime.FloatValue = 5.0;
+
+	CreateTimer((cv_RoundTime.FloatValue*60.0), Timer_EndRound, _, TIMER_FLAG_NO_MAPCHANGE);
 
 	GetCurrentMap(g_cMap, sizeof(g_cMap));
 	cv_NextLevel.SetString(g_cMap, true, false);
@@ -406,6 +408,7 @@ public int Menu_Welcome_Handler(Menu menu, MenuAction action, int param1, int pa
 }
 
 public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadcast){
+	//ServerCommand("mp_warmup_end");
 	if(g_bAwayKill)
 		cv_DefaultWin.IntValue = (g_iAwayTeam == 2 ? 3 : 2);
 	else
@@ -415,7 +418,6 @@ public Action Event_RoundStart(Handle event, const char[] name, bool dontBroadca
 	cv_IgnoreWins.IntValue = 1;
 
 	if(!g_bIdling){
-		CreateTimer((cv_RoundTime.FloatValue*60.0), Timer_EndRound, _, TIMER_FLAG_NO_MAPCHANGE);
 		g_bIdling = true;
 	}
 
