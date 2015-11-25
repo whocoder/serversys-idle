@@ -59,13 +59,13 @@ ConVar cv_DoWarmUp;
 ConVar cv_NextLevel;
 
 public void OnPluginStart(){
-	g_iServerStart = GetTime();
-
 	LoadConfig();
 
 	LoadTranslations("common.phrases");
 	LoadTranslations("generic.phrases");
 	LoadTranslations("serversys.idle.phrases");
+
+	g_iServerStart = GetTime();
 
 	HookEvent("player_connect_full", Event_OnFullConnect, EventHookMode_Post);
 	HookEvent("cs_match_end_restart", Event_OnMatchRestart, EventHookMode_Post);
@@ -75,6 +75,7 @@ public void OnPluginStart(){
 	HookEvent("player_team", Event_PlayerTeam, EventHookMode_Pre);
 
 	AddNormalSoundHook(Hook_Sound);
+	AddTempEntHook("Shotgun Shot", Hook_ShotgunShot);
 
 	if(g_bLateLoad && PlayerCount() > 0){
 		CPrintToChatAll("%t", "Live updates");
@@ -265,12 +266,28 @@ public Action OnPlayerRunCmd(int client, int &buttons, int &impulse, float vel[3
 	return Plugin_Continue;
 }
 
-public Action Hook_Sound(int clients[64], int &numc, char sam[PLATFORM_MAX_PATH], int &ent, int &ch, float &vo, int &lv, int &pi, int &fl){
+public Action Hook_ShotgunShot(const char[] te_name, const int[] players, int numplayers, float delay){
+	return Plugin_Stop;
+}
+
+public Action Hook_Sound(int clients[64], int &numc, char sample[PLATFORM_MAX_PATH], int &ent, int &ch, float &vo, int &lv, int &pi, int &fl){
 	if(!g_bDisableSounds)
 		return Plugin_Continue;
 
-	if((0 < ent <= MaxClients) && IsClientInGame(ent))
-		return Plugin_Handled;
+	if(StrContains(sample, "player/footstep", false) != -1)
+		return Plugin_Stop;
+
+	if(StrContains(sample, "player/death", false) != -1)
+		return Plugin_Stop;
+
+	if(StrContains(sample, "player/land", false) != -1)
+		return Plugin_Stop;
+
+	if(StrContains(sample, "player/damage", false) != -1)
+		return Plugin_Stop;
+
+	if(StrContains(sample, "weapons", false) != -1)
+		return Plugin_Stop;
 
 	return Plugin_Continue;
 }
@@ -289,7 +306,7 @@ public Action Hook_SetTransmit(int entity, int client){
 
 public void Command_Uptime(int client, const char[] command, const char[] args){
 	if(g_bUpTime && (0 < client <= MaxClients) && IsClientInGame(client)){
-		float time = GetEngineTime() - g_iServerStart;
+		float time = (GetEngineTime() - (g_iServerStart*1.0));
 		int hours = RoundToFloor(time/3600.0);
 		time -= hours*3600.0;
 		int minutes = RoundToFloor(time/60.0);
@@ -373,10 +390,10 @@ public Action PlayerSpawnPost(Handle timer, int userid){
 	if((0 < client <= MaxClients) && IsClientInGame(client)){
 		if(g_bAwayKill == true && SpawnSetup() == true){
 			TeleportEntity(client, ((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away : g_fSpawn_Active), NULL_VECTOR, NULL_VECTOR);
-			PrintToServer("Spawning client %N at %f, %f, %f,", client,
-				((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[0] : g_fSpawn_Active[0]),
-				((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[1] : g_fSpawn_Active[1]),
-				((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[2] : g_fSpawn_Active[2]));
+			//PrintToServer("Spawning client %N at %f, %f, %f,", client,
+			//	((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[0] : g_fSpawn_Active[0]),
+			//	((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[1] : g_fSpawn_Active[1]),
+			//	((GetClientTeam(client) == g_iAwayTeam) ? g_fSpawn_Away[2] : g_fSpawn_Active[2]));
 		}
 	}
 
