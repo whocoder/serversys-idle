@@ -7,7 +7,7 @@
 
 	"Idle uptime"
 	{
-		"#format"	"{1:i},{2:i},{3:f}"
+		"#format"	"{1:i},{2:i},{3:i}"
 		"en"		"The server has been up for {1} hours, {2} minutes and {3} seconds."
 	}
 

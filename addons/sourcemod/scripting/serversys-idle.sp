@@ -306,12 +306,12 @@ public Action Hook_SetTransmit(int entity, int client){
 
 public void Command_Uptime(int client, const char[] command, const char[] args){
 	if(g_bUpTime && (0 < client <= MaxClients) && IsClientInGame(client)){
-		float time = (GetEngineTime() - (g_iServerStart*1.0));
-		int hours = RoundToFloor(time/3600.0);
-		time -= hours*3600.0;
-		int minutes = RoundToFloor(time/60.0);
-		time -= hours*60.0;
-		CPrintToChat(client, "%t", "Idle uptime", hours, minutes, time);
+		int time = (GetTime() - g_iServerStart);
+		int hours = RoundToFloor(time / (3600));
+		int minutes = RoundToFloor((time % 3600) / 60);
+		int seconds = RoundToCeil((time % 3600) % 60)
+		
+		CPrintToChat(client, "%t", "Idle uptime", hours, minutes, seconds);
 	}
 }
 
